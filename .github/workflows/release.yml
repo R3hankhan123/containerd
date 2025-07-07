@@ -3,8 +3,10 @@ on:
     branches:
       - main
       - "release/**"
+      - test
     tags:
       - "v*" # Push events to matching v*, i.e. v1.0, v20.15.10
+  workflow_dispatch: 
   pull_request:
     branches:
       - main
@@ -98,7 +100,8 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.ref }}
           path: src/github.com/containerd/containerd
-
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
       - name: Setup buildx instance
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
         with:
@@ -123,44 +126,3 @@ jobs:
         working-directory: src/github.com/containerd/containerd
         env:
           PLATFORM: ${{ matrix.dockerfile-platform }}
-      - name: Save Artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: release-tars-${{env.PLATFORM_CLEAN}}
-          path: src/github.com/containerd/containerd/releases/*.tar.gz*
-
-  release:
-    name: Create containerd Release
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [build, check]
-    steps:
-      - name: Download builds and release notes
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          path: builds
-      - name: Attest Artifacts
-        id: attest
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
-        with:
-          subject-path: ./builds/release-tars-**/*.tar.gz
-      - name: Rename attestation artifact
-        run: mv ${{ steps.attest.outputs.bundle-path }} containerd-${{ needs.check.outputs.stringver }}-attestation.intoto.jsonl
-      - name: Create Release
-        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fail_on_unmatched_files: true
-          name: containerd ${{ needs.check.outputs.stringver }}
-          draft: false
-          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
-          body_path: ./builds/containerd-release-notes/release-notes.md
-          files: |
-            builds/release-tars-**/*
-            containerd-*-attestation.intoto.jsonl
-          make_latest: false
