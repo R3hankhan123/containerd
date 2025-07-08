@@ -23,8 +23,8 @@ FROM --platform=$BUILDPLATFORM ${BASE_IMAGE} AS base
 COPY --from=xx / /
 SHELL ["/bin/bash", "-xec"]
 ENV DEBIAN_FRONTEND=noninteractive
-RUN	rm -rf /var/lib/apt/lists/* && \
-	apt-get update && \
+RUN	apt-get update && \
+	apt upgrade && \
 	apt-get install -y dpkg-dev git make pkg-config
 ARG TARGETPLATFORM
 # gcc is needed for github.com/containerd/btrfs/v2
