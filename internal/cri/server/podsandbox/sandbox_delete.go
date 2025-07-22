@@ -50,7 +50,10 @@ func (c *Controller) Shutdown(ctx context.Context, sandboxID string) error {
 	// Delete sandbox container.
 	if sandbox.Container != nil {
 		if err := c.cleanupSandboxTask(ctx, sandbox.Container); err != nil {
-			return fmt.Errorf("failed to delete sandbox task %q: %w", sandboxID, err)
+			if !errdefs.IsNotFound(err) {
+				return fmt.Errorf("failed to delete sandbox task %q: %w", sandboxID, err)
+			}
+			log.G(ctx).Tracef("Sandbox task cleanup called for sandbox task %q that does not exist", sandboxID)
 		}
 
 		if err := sandbox.Container.Delete(ctx, containerd.WithSnapshotCleanup); err != nil {

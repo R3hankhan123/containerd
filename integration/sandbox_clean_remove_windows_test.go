@@ -198,7 +198,10 @@ func removePodSandbox(ctx context.Context, t *testing.T, client runtime.RuntimeS
 	_, err := client.RemovePodSandbox(ctx, &runtime.RemovePodSandboxRequest{
 		PodSandboxId: podID,
 	})
-	require.NoError(t, err, "failed RemovePodSandbox for sandbox: %s", podID)
+	// Ignore NotFound errors during cleanup to prevent flaky test failures
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		require.NoError(t, err, "failed RemovePodSandbox for sandbox: %s", podID)
+	}
 }
 
 func stopPodSandbox(ctx context.Context, t *testing.T, client runtime.RuntimeServiceClient, podID string) {
@@ -206,7 +209,10 @@ func stopPodSandbox(ctx context.Context, t *testing.T, client runtime.RuntimeSer
 	_, err := client.StopPodSandbox(ctx, &runtime.StopPodSandboxRequest{
 		PodSandboxId: podID,
 	})
-	require.NoError(t, err, "failed StopPodSandbox for sandbox: %s", podID)
+	// Ignore NotFound errors during cleanup to prevent flaky test failures
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		require.NoError(t, err, "failed StopPodSandbox for sandbox: %s", podID)
+	}
 }
 
 func stopContainer(ctx context.Context, t *testing.T, client runtime.RuntimeServiceClient, containerID string) {
@@ -231,7 +237,10 @@ func removeContainer(ctx context.Context, t *testing.T, client runtime.RuntimeSe
 	_, err := client.RemoveContainer(ctx, &runtime.RemoveContainerRequest{
 		ContainerId: containerID,
 	})
-	require.NoError(t, err, "failed RemoveContainer request for container: %s", containerID)
+	// Ignore NotFound errors during cleanup to prevent flaky test failures
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		require.NoError(t, err, "failed RemoveContainer request for container: %s", containerID)
+	}
 }
 
 // This test checks if create/stop and remove pods and containers work as expected

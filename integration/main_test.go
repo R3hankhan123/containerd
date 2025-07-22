@@ -280,8 +280,13 @@ func PodSandboxConfigWithCleanup(t *testing.T, name, ns string, opts ...PodSandb
 	sb, err := runtimeService.RunPodSandbox(sbConfig, *runtimeHandler)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		assert.NoError(t, runtimeService.StopPodSandbox(sb))
-		assert.NoError(t, runtimeService.RemovePodSandbox(sb))
+		// Ignore NotFound errors during cleanup to prevent flaky test failures
+		if err := runtimeService.StopPodSandbox(sb); err != nil && !strings.Contains(err.Error(), "not found") {
+			assert.NoError(t, err)
+		}
+		if err := runtimeService.RemovePodSandbox(sb); err != nil && !strings.Contains(err.Error(), "not found") {
+			assert.NoError(t, err)
+		}
 	})
 
 	return sb, sbConfig

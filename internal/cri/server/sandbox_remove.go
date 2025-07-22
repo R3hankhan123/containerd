@@ -87,8 +87,11 @@ func (c *criService) RemovePodSandbox(ctx context.Context, r *runtime.RemovePodS
 			continue
 		}
 		_, err = c.RemoveContainer(ctx, &runtime.RemoveContainerRequest{ContainerId: cntr.ID})
-		if err != nil {
+		if err != nil && !errdefs.IsNotFound(err) {
 			return nil, fmt.Errorf("failed to remove container %q: %w", cntr.ID, err)
+		}
+		if err != nil && errdefs.IsNotFound(err) {
+			log.G(ctx).Tracef("Container %q already removed during sandbox cleanup", cntr.ID)
 		}
 	}
 
