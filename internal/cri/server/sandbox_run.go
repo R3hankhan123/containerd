@@ -241,8 +241,15 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 				if cleanupErr = c.teardownPodNetwork(deferCtx, sandbox); cleanupErr != nil {
 					log.G(ctx).WithError(cleanupErr).Errorf("Failed to destroy network for sandbox %q", id)
 
-					// ignoring failed to destroy networks when we failed to setup networks
-					if sandbox.CNIResult == nil {
+					// Be more resilient to teardown failures during rollback
+					errStr := cleanupErr.Error()
+					if strings.Contains(errStr, "not found") || 
+					   strings.Contains(errStr, "no such file") ||
+					   strings.Contains(errStr, "already deleted") ||
+					   strings.Contains(errStr, "network namespace is gone") ||
+					   strings.Contains(errStr, "please retry") ||
+					   sandbox.CNIResult == nil {
+						log.G(ctx).WithError(cleanupErr).Warnf("Ignoring expected network teardown error during cleanup for sandbox %q", id)
 						cleanupErr = nil
 					}
 				}

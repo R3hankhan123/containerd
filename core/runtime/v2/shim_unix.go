@@ -25,6 +25,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/containerd/fifo"
@@ -36,12 +37,24 @@ func openShimLog(ctx context.Context, bundle *Bundle, _ func(string, time.Durati
 }
 
 func checkCopyShimLogError(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+	
+	// Always ignore these expected errors during cleanup regardless of context state
+	if err == fifo.ErrReadClosed || 
+	   errors.Is(err, os.ErrClosed) ||
+	   strings.Contains(err.Error(), "file already closed") ||
+	   strings.Contains(err.Error(), "broken pipe") ||
+	   strings.Contains(err.Error(), "connection reset") {
+		return nil
+	}
+	
+	// If context is done, only log unexpected errors
 	select {
 	case <-ctx.Done():
-		if err == fifo.ErrReadClosed || errors.Is(err, os.ErrClosed) {
-			return nil
-		}
+		return nil
 	default:
+		return err
 	}
-	return err
 }

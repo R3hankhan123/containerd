@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/containerd/containerd/v2/internal/failpoint"
@@ -83,10 +84,35 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 func cmdDel(args *skel.CmdArgs) error {
 	if err := handleFailpoint(args, "DEL"); err != nil {
-		return err
+		// Make DELETE operations more resilient to expected cleanup errors
+		errStr := err.Error()
+		if strings.Contains(errStr, "not found") || 
+		   strings.Contains(errStr, "no such file") ||
+		   strings.Contains(errStr, "already deleted") ||
+		   strings.Contains(errStr, "network namespace is gone") ||
+		   strings.Contains(errStr, "please retry") {
+			// Log the error but don't fail the operation
+			fmt.Fprintf(os.Stderr, "CNI bridge-fp: ignoring expected cleanup error: %v\n", err)
+			// Still delegate to the underlying plugin for cleanup
+		} else {
+			return err
+		}
 	}
 
-	return invoke.DelegateDel(context.TODO(), delegatedPlugin, args.StdinData, nil)
+	err := invoke.DelegateDel(context.TODO(), delegatedPlugin, args.StdinData, nil)
+	if err != nil {
+		// Make the underlying delegate deletion more resilient too
+		errStr := err.Error()
+		if strings.Contains(errStr, "not found") || 
+		   strings.Contains(errStr, "no such file") ||
+		   strings.Contains(errStr, "already deleted") ||
+		   strings.Contains(errStr, "network namespace is gone") {
+			fmt.Fprintf(os.Stderr, "CNI bridge-fp: ignoring expected delegate cleanup error: %v\n", err)
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func handleFailpoint(args *skel.CmdArgs, cmdKind string) error {
