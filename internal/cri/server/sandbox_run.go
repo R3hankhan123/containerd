@@ -243,12 +243,12 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 
 					// Be more resilient to teardown failures during rollback
 					errStr := cleanupErr.Error()
-					if strings.Contains(errStr, "not found") || 
-					   strings.Contains(errStr, "no such file") ||
-					   strings.Contains(errStr, "already deleted") ||
-					   strings.Contains(errStr, "network namespace is gone") ||
-					   strings.Contains(errStr, "please retry") ||
-					   sandbox.CNIResult == nil {
+					if strings.Contains(errStr, "not found") ||
+						strings.Contains(errStr, "no such file") ||
+						strings.Contains(errStr, "already deleted") ||
+						strings.Contains(errStr, "network namespace is gone") ||
+						strings.Contains(errStr, "please retry") ||
+						sandbox.CNIResult == nil {
 						log.G(ctx).WithError(cleanupErr).Warnf("Ignoring expected network teardown error during cleanup for sandbox %q", id)
 						cleanupErr = nil
 					}

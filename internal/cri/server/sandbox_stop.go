@@ -115,14 +115,14 @@ func (c *criService) stopPodSandbox(ctx context.Context, sandbox sandboxstore.Sa
 		} else if closed {
 			sandbox.NetNSPath = ""
 		}
-		
+
 		if sandbox.CNIResult != nil {
 			if err := c.teardownPodNetwork(ctx, sandbox); err != nil {
 				log.G(ctx).WithError(err).Errorf("failed to destroy network for sandbox %q, continuing with cleanup", id)
 				// Don't return error here - continue with other cleanup operations
 			}
 		}
-		
+
 		if err := sandbox.NetNS.Remove(); err != nil {
 			log.G(ctx).WithError(err).Warnf("failed to remove network namespace for sandbox %q, continuing with cleanup", id)
 			// Don't return error here - the namespace might already be cleaned up
@@ -177,14 +177,14 @@ func (c *criService) teardownPodNetwork(ctx context.Context, sandbox sandboxstor
 	networkPluginOperationsLatency.WithValues(networkTearDownOp).UpdateSince(netStart)
 	if err != nil {
 		networkPluginOperationsErrors.WithValues(networkTearDownOp).Inc()
-		
+
 		// Make CNI network teardown more resilient to common cleanup errors
 		errStr := err.Error()
-		if strings.Contains(errStr, "not found") || 
-		   strings.Contains(errStr, "no such file") ||
-		   strings.Contains(errStr, "already deleted") ||
-		   strings.Contains(errStr, "network namespace is gone") ||
-		   strings.Contains(errStr, "please retry") {
+		if strings.Contains(errStr, "not found") ||
+			strings.Contains(errStr, "no such file") ||
+			strings.Contains(errStr, "already deleted") ||
+			strings.Contains(errStr, "network namespace is gone") ||
+			strings.Contains(errStr, "please retry") {
 			log.G(ctx).WithError(err).Warnf("Ignoring expected CNI teardown error for sandbox %q", id)
 			return nil
 		}
