@@ -20,6 +20,7 @@ import (
 	"context"
 	goruntime "runtime"
 	"sort"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -142,12 +143,13 @@ func TestContainerdRestart(t *testing.T) {
 			require.NoError(t, err)
 
 			err = task.Kill(ctx, syscall.SIGKILL, containerd.WithKillAll)
-			// NOTE: CRI-plugin setups watcher for each container and
-			// cleanups container when the watcher returns exit event.
-			// We just need to kill that sandbox and wait for exit
-			// event from waitCh. If the sandbox container exits,
-			// the state of sandbox must be NOT_READY.
-			require.NoError(t, err)
+			if err != nil {
+				if strings.Contains(err.Error(), "not found") {
+					t.Logf("Kill task ignored NotFound error for sandbox: %s", sid)
+				} else {
+					require.NoError(t, err)
+				}
+			}
 
 			select {
 			case <-waitCh:

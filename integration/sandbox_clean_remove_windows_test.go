@@ -209,9 +209,10 @@ func stopPodSandbox(ctx context.Context, t *testing.T, client runtime.RuntimeSer
 	_, err := client.StopPodSandbox(ctx, &runtime.StopPodSandboxRequest{
 		PodSandboxId: podID,
 	})
-	// Ignore NotFound errors during cleanup to prevent flaky test failures
 	if err != nil && !strings.Contains(err.Error(), "not found") {
 		require.NoError(t, err, "failed StopPodSandbox for sandbox: %s", podID)
+	} else if err != nil {
+		t.Logf("StopPodSandbox ignored NotFound error for sandbox: %s", podID)
 	}
 }
 
@@ -237,9 +238,10 @@ func removeContainer(ctx context.Context, t *testing.T, client runtime.RuntimeSe
 	_, err := client.RemoveContainer(ctx, &runtime.RemoveContainerRequest{
 		ContainerId: containerID,
 	})
-	// Ignore NotFound errors during cleanup to prevent flaky test failures
 	if err != nil && !strings.Contains(err.Error(), "not found") {
 		require.NoError(t, err, "failed RemoveContainer request for container: %s", containerID)
+	} else if err != nil {
+		t.Logf("RemoveContainer ignored NotFound error for container: %s", containerID)
 	}
 }
 

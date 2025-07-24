@@ -281,11 +281,19 @@ func PodSandboxConfigWithCleanup(t *testing.T, name, ns string, opts ...PodSandb
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		// Ignore NotFound errors during cleanup to prevent flaky test failures
-		if err := runtimeService.StopPodSandbox(sb); err != nil && !strings.Contains(err.Error(), "not found") {
-			assert.NoError(t, err)
+		if err := runtimeService.StopPodSandbox(sb); err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				t.Logf("StopPodSandbox ignored NotFound error for sandbox: %s", sb)
+			} else {
+				assert.NoError(t, err)
+			}
 		}
-		if err := runtimeService.RemovePodSandbox(sb); err != nil && !strings.Contains(err.Error(), "not found") {
-			assert.NoError(t, err)
+		if err := runtimeService.RemovePodSandbox(sb); err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				t.Logf("RemovePodSandbox ignored NotFound error for sandbox: %s", sb)
+			} else {
+				assert.NoError(t, err)
+			}
 		}
 	})
 
