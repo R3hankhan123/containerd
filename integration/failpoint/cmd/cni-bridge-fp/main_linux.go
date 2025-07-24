@@ -86,11 +86,11 @@ func cmdDel(args *skel.CmdArgs) error {
 	if err := handleFailpoint(args, "DEL"); err != nil {
 		// Make DELETE operations more resilient to expected cleanup errors
 		errStr := err.Error()
-		if strings.Contains(errStr, "not found") || 
-		   strings.Contains(errStr, "no such file") ||
-		   strings.Contains(errStr, "already deleted") ||
-		   strings.Contains(errStr, "network namespace is gone") ||
-		   strings.Contains(errStr, "please retry") {
+		if strings.Contains(errStr, "not found") ||
+			strings.Contains(errStr, "no such file") ||
+			strings.Contains(errStr, "already deleted") ||
+			strings.Contains(errStr, "network namespace is gone") ||
+			strings.Contains(errStr, "please retry") {
 			// Log the error but don't fail the operation
 			fmt.Fprintf(os.Stderr, "CNI bridge-fp: ignoring expected cleanup error: %v\n", err)
 			// Still delegate to the underlying plugin for cleanup
@@ -103,10 +103,10 @@ func cmdDel(args *skel.CmdArgs) error {
 	if err != nil {
 		// Make the underlying delegate deletion more resilient too
 		errStr := err.Error()
-		if strings.Contains(errStr, "not found") || 
-		   strings.Contains(errStr, "no such file") ||
-		   strings.Contains(errStr, "already deleted") ||
-		   strings.Contains(errStr, "network namespace is gone") {
+		if strings.Contains(errStr, "not found") ||
+			strings.Contains(errStr, "no such file") ||
+			strings.Contains(errStr, "already deleted") ||
+			strings.Contains(errStr, "network namespace is gone") {
 			fmt.Fprintf(os.Stderr, "CNI bridge-fp: ignoring expected delegate cleanup error: %v\n", err)
 			return nil
 		}
