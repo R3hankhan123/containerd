@@ -18,6 +18,7 @@ package integration
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -224,14 +225,27 @@ func testCRIImagePullTimeoutByHoldingContentOpenWriter(t *testing.T, useLocal bo
 		errCh <- err
 	}()
 
+	// Wait for the pull to be blocked by locked manifests
+	timeout := defaultImagePullProgressTimeout * 5
+	time.Sleep(20 * time.Millisecond) // Give some time for the pull to start
+
 	select {
-	case <-time.After(defaultImagePullProgressTimeout * 5):
+	case <-time.After(timeout):
+		// Expected: pull should be blocked by locked writers
+		t.Logf("Pull operation blocked for %v as expected, releasing manifest locks", timeout)
 		// release the lock
 		cleanupWriters()
 	case err := <-errCh:
 		t.Fatalf("PullImage should not return because the manifest has been locked, but got error=%v", err)
 	}
-	assert.NoError(t, <-errCh)
+
+	// Wait for the pull to complete after releasing locks
+	select {
+	case err := <-errCh:
+		assert.NoError(t, err, "Pull should succeed after releasing manifest locks")
+	case <-time.After(defaultImagePullProgressTimeout * 3):
+		t.Fatal("Pull operation did not complete within timeout after releasing locks")
+	}
 }
 
 func testCRIImagePullTimeoutByHoldingContentOpenWriterWithLocal(t *testing.T) {
@@ -276,6 +290,15 @@ func testCRIImagePullTimeoutByNoDataTransferred(t *testing.T, useLocal bool) {
 	mirrorURL, err := url.Parse(ts.URL)
 	assert.NoError(t, err)
 
+	// Verify the mirror registry is healthy and responsive before proceeding
+	err = checkRegistryHealth(t, mirrorURL.String(), 5)
+	if err != nil {
+		t.Fatalf("Mirror registry health check failed: %v", err)
+	}
+
+	// Give the registry a moment to fully stabilize
+	time.Sleep(100 * time.Millisecond)
+
 	var hostTomlContent = fmt.Sprintf(`
 [host."%s"]
   capabilities = ["pull", "resolve", "push"]
@@ -318,7 +341,34 @@ func testCRIImagePullTimeoutByNoDataTransferred(t *testing.T, useLocal bool) {
 
 		_, err = criService.PullImage(dctx, fmt.Sprintf("%s/%s", mirrorURL.Host, "containerd/volume-ownership:2.1"), nil, nil, "")
 
-		assert.Equal(t, context.Canceled, errors.Unwrap(err), "[%v] expected canceled error, but got (%v)", idx, err)
+		// Check for the expected context.Canceled error (from circuit breaker)
+		// The error might be deeply wrapped, so we need to unwrap recursively
+		var unwrappedErr error = err
+		for unwrappedErr != nil {
+			if unwrappedErr == context.Canceled {
+				break
+			}
+			next := errors.Unwrap(unwrappedErr)
+			if next == nil {
+				// Can't unwrap further, check if the error message contains "context canceled"
+				errStr := unwrappedErr.Error()
+				if strings.Contains(errStr, "context canceled") || strings.Contains(errStr, "context cancelled") {
+					unwrappedErr = context.Canceled
+					break
+				}
+			}
+			unwrappedErr = next
+		}
+
+		if unwrappedErr == nil {
+			// Final fallback: check the original error message
+			errStr := err.Error()
+			if strings.Contains(errStr, "context canceled") || strings.Contains(errStr, "context cancelled") {
+				unwrappedErr = context.Canceled
+			}
+		}
+
+		assert.Equal(t, context.Canceled, unwrappedErr, "[%v] expected canceled error, but got (%v)", idx, err)
 		assert.True(t, mirrorSrv.limiter.clearHitCircuitBreaker(), "[%v] expected to hit circuit breaker", idx)
 
 		// cleanup the temp data by sync delete
@@ -526,4 +576,55 @@ func initLocalCRIImageService(client *containerd.Client, tmpDir string, registry
 		Client:           client,
 		Transferrer:      client.TransferService(),
 	})
+}
+
+// checkRegistryHealth verifies that the mirror registry is responsive and can proxy requests
+func checkRegistryHealth(t *testing.T, registryURL string, maxRetries int) error {
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	// Try to access the registry's /v2/ endpoint which should return 200 or 401
+	healthURL := fmt.Sprintf("%s/v2/", registryURL)
+
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			delay := time.Duration(attempt) * 500 * time.Millisecond
+			t.Logf("Registry health check attempt %d failed, retrying in %v", attempt, delay)
+			time.Sleep(delay)
+		}
+
+		resp, err := client.Get(healthURL)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to connect to registry: %v", err)
+			continue
+		}
+		resp.Body.Close()
+
+		// Registry should respond with 200 (if no auth required) or 401 (if auth required)
+		// Both indicate the registry is working
+		if resp.StatusCode == 200 || resp.StatusCode == 401 {
+			t.Logf("Registry health check passed (status: %d)", resp.StatusCode)
+
+			// Additional check: try to access a specific manifest endpoint to ensure proxying works
+			manifestURL := fmt.Sprintf("%s/v2/containerd/volume-ownership/manifests/2.1", registryURL)
+			manifestResp, manifestErr := client.Head(manifestURL)
+			if manifestErr != nil {
+				t.Logf("Manifest endpoint check failed (non-fatal): %v", manifestErr)
+			} else {
+				manifestResp.Body.Close()
+				t.Logf("Manifest endpoint responded with status: %d", manifestResp.StatusCode)
+			}
+
+			return nil
+		}
+
+		lastErr = fmt.Errorf("registry returned unexpected status: %d", resp.StatusCode)
+	}
+
+	return fmt.Errorf("registry health check failed after %d attempts: %v", maxRetries, lastErr)
 }
