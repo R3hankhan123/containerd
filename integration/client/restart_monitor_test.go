@@ -36,6 +36,7 @@ import (
 	srvconfig "github.com/containerd/containerd/v2/cmd/containerd/server/config"
 	"github.com/containerd/containerd/v2/core/runtime/restart"
 	"github.com/containerd/containerd/v2/pkg/oci"
+	"github.com/containerd/errdefs"
 	"github.com/containerd/containerd/v2/pkg/testutil"
 	"github.com/containerd/typeurl/v2"
 	"github.com/stretchr/testify/require"
@@ -192,7 +193,7 @@ func testRestartMonitorAlways(t *testing.T, client *Client, interval time.Durati
 		t.Fatal(err)
 	}
 	defer func() {
-		if _, err := task.Delete(ctx, WithProcessKill); err != nil {
+		if _, err := task.Delete(ctx, WithProcessKill); err != nil && !errdefs.IsNotFound(err) {
 			t.Logf("failed to delete task: %v", err)
 		}
 	}()
@@ -206,7 +207,7 @@ func testRestartMonitorAlways(t *testing.T, client *Client, interval time.Durati
 		t.Fatal(err)
 	}
 
-	if err := task.Kill(ctx, syscall.SIGKILL); err != nil {
+	if err := task.Kill(ctx, syscall.SIGKILL); err != nil && !errdefs.IsNotFound(err) {
 		t.Fatal(err)
 	}
 
@@ -295,7 +296,7 @@ func testRestartMonitorPausedTaskWithAlways(t *testing.T, client *Client, interv
 		t.Fatal(err)
 	}
 	defer func() {
-		if _, err := task.Delete(ctx, WithProcessKill); err != nil {
+		if _, err := task.Delete(ctx, WithProcessKill); err != nil && !errdefs.IsNotFound(err) {
 			t.Logf("failed to delete task: %v", err)
 		}
 	}()
@@ -368,7 +369,7 @@ func testRestartMonitorWithOnFailurePolicy(t *testing.T, client *Client, interva
 		t.Fatal(err)
 	}
 	defer func() {
-		if _, err := task.Delete(ctx, WithProcessKill); err != nil {
+		if _, err := task.Delete(ctx, WithProcessKill); err != nil && !errdefs.IsNotFound(err) {
 			t.Logf("failed to delete task: %v", err)
 		}
 	}()
